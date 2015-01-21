@@ -44,6 +44,8 @@ for (int i=0;i<niters;i++) {
     cmd_publisher.publish(twist_cmd); // really, should only need to publish this once, but no hard done
     sleep_timer.sleep(); // sleep for (remainder of) 10m
 }
+
+
 twist_cmd.linear.x = 0.0;
 twist_cmd.angular.z = -0.314;
 niters=500; // 5 sec
@@ -52,8 +54,54 @@ for (int i=0;i<niters;i++) {
     cmd_publisher.publish(twist_cmd); // really, should only need to publish this once, but no hard done
     sleep_timer.sleep(); // sleep for (remainder of) 10m
 }
+
+twist_cmd.linear.x = 0.4;
+twist_cmd.angular.z = 0.0;
+niters = 3060;
+ROS_INFO("marching");
+for (int i=0;i<niters;i++) {
+    cmd_publisher.publish(twist_cmd); // really, should only need to publish this once, but no hard done
+    sleep_timer.sleep(); // sleep for (remainder of) 10m
+}
+
+twist_cmd.linear.x = 0.0;
+twist_cmd.angular.z = -0.314;
+niters=500; // 5 sec
+ROS_INFO("Time to rotate negative");
+for (int i=0;i<niters;i++) {
+    cmd_publisher.publish(twist_cmd); // really, should only need to publish this once, but no hard done
+    sleep_timer.sleep(); // sleep for (remainder of) 10m
+}
+
+twist_cmd.linear.x = 0.4;
+twist_cmd.angular.z = 0.0;
+niters = 2100;
+ROS_INFO("marching");
+for (int i=0;i<niters;i++) {
+    cmd_publisher.publish(twist_cmd); // really, should only need to publish this once, but no hard done
+    sleep_timer.sleep(); // sleep for (remainder of) 10m
+}
+
+twist_cmd.linear.x = 0.0;
+twist_cmd.angular.z = -0.314;
+niters=500; // 5 sec
+ROS_INFO("Time to rotate negative");
+for (int i=0;i<niters;i++) {
+    cmd_publisher.publish(twist_cmd); // really, should only need to publish this once, but no hard done
+    sleep_timer.sleep(); // sleep for (remainder of) 10m
+}
+
+twist_cmd.linear.x = 0.4;
+twist_cmd.angular.z = 0.0;
+niters = 435;
+ROS_INFO("marching");
+for (int i=0;i<niters;i++) {
+    cmd_publisher.publish(twist_cmd); // really, should only need to publish this once, but no hard done
+    sleep_timer.sleep(); // sleep for (remainder of) 10m
+}
+
 ROS_INFO("my work here is done");
-//while (ros::ok()) 
+while (ros::ok()) 
 {
 twist_cmd.linear.x = 0.0;
 twist_cmd.angular.z = 0;
