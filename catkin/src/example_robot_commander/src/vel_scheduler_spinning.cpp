@@ -109,6 +109,7 @@ int main(int argc, char **argv) {
     double start_phi = 0.0;
 
     double scheduled_vel = 0.0; //desired vel, assuming all is per plan
+    double scheduled_omega = 0.0 //ashley added this, desired yaw rate
     double new_cmd_vel = 0.0; // value of speed to be commanded; update each iteration
     double new_cmd_omega = 0.1; // update spin rate command as well
 
@@ -149,8 +150,10 @@ int main(int argc, char **argv) {
     {
         ros::spinOnce(); // allow callbacks to populate fresh data
         // compute angle travelled so far:
+
         //double delta_x = odom_x_ - start_x;
         //double delta_y = odom_y_ - start_y;
+
         double delta_phi = odom_phi_ - start_phi;
         segment_length_done = sqrt(delta_phi * delta_phi);
 
@@ -159,37 +162,37 @@ int main(int argc, char **argv) {
 
         //use segment_length_done to decide what vel should be, as per plan
         if (dist_to_go<= 0.0) { // at goal, or overshot; stop!
-            scheduled_vel=0.0;
+            scheduled_omega= 0.0;
         }
         else if (dist_to_go <= dist_decel) { //possibly should be braking to a halt
             // dist = 0.5*a*t_halt^2; so t_halt = sqrt(2*dist/a);   v = a*t_halt
             // so v = a*sqrt(2*dist/a) = sqrt(2*dist*a)
-            scheduled_vel = sqrt(2 * dist_to_go * a_max);
-            ROS_INFO("braking zone: v_sched = %f",scheduled_vel);
+            scheduled_omega = sqrt(2 * dist_to_go * alpha_max);
+            ROS_INFO("braking zone: v_sched = %f",scheduled_omega);
         }
         else { // not ready to decel, so target vel is v_max, either accel to it or hold it
-            scheduled_vel = v_max;
+            scheduled_omega = omega_max;
         }
         
   
 
         //how does the current velocity compare to the scheduled vel?
-        if (odom_omega_ < scheduled_vel) {  // maybe we halted, e.g. due to estop or obstacle;
+        if (odom_omega_ < scheduled_omega) {  // maybe we halted, e.g. due to estop or obstacle;
             // may need to ramp up to v_max; do so within accel limits
-            double v_test = odom_omega_ + a_max*dt_callback_; // if callbacks are slow, this could be abrupt
+            double v_test = odom_omega_ +alpha_max*dt_callback_; // if callbacks are slow, this could be abrupt
             // operator:  c = (a>b) ? a : b;
-            new_cmd_omega = (v_test < scheduled_vel) ? v_test : scheduled_vel; //choose lesser of two options
+            new_cmd_omega = (v_test < scheduled_omega) ? v_test : scheduled_omega; //choose lesser of two options
             // this prevents overshooting scheduled_vel
-        } else if (odom_omega_ > scheduled_vel) { //travelling too fast--this could be trouble
+        } else if (odom_omega_ > scheduled_omega) { //travelling too fast--this could be trouble
             // ramp down to the scheduled velocity.  However, scheduled velocity might already be ramping down at a_max.
             // need to catch up, so ramp down even faster than a_max.  Try 1.2*a_max.
-            ROS_INFO("odom omega: %f; sched vel: %f",odom_omega_,scheduled_vel); //debug/analysis output; can comment this out
+            ROS_INFO("odom omega: %f; sched vel: %f",odom_omega_,scheduled_omega); //debug/analysis output; can comment this out
             
-            double v_test = odom_omega_ - 1.2 * a_max*dt_callback_; //moving too fast--try decelerating faster than nominal a_max
+            double v_test = odom_omega_ - 1.2 * alpha_max*dt_callback_; //moving too fast--try decelerating faster than nominal a_max
 
-            new_cmd_omega = (v_test > scheduled_vel) ? v_test : scheduled_vel; // choose larger of two options...don't overshoot scheduled_vel
+            new_cmd_omega = (v_test > scheduled_omega) ? v_test : scheduled_omega; // choose larger of two options...don't overshoot scheduled_vel
         } else {
-            new_cmd_omega = scheduled_vel; //silly third case: this is already true, if here.  Issue the scheduled velocity
+            new_cmd_omega = scheduled_omega; //silly third case: this is already true, if here.  Issue the scheduled velocity
         }
         ROS_INFO("cmd omega: %f",new_cmd_omega); // debug output
 
