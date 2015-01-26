@@ -98,7 +98,7 @@ int main(int argc, char **argv) {
 
     // here is a crude description of one segment of a journey.  Will want to generalize this to handle multiple segments
     // define the desired path length of this segment
-    double segment_length = 4.75; // desired travel distance in meters; anticipate travelling multiple segments
+    double segment_length = 0.75; // desired travel distance in meters; anticipate travelling multiple segments
     
     //here's a subtlety:  might be tempted to measure distance to the goal, instead of distance from the start.
     // HOWEVER, will NEVER satisfy distance to goal = 0 precisely, but WILL eventually move far enought to satisfy distance travelled condition
@@ -109,8 +109,8 @@ int main(int argc, char **argv) {
     double start_phi = 0.0;
 
     double scheduled_vel = 0.0; //desired vel, assuming all is per plan
-    double new_cmd_vel = 0.1; // value of speed to be commanded; update each iteration
-    double new_cmd_omega = 0.0; // update spin rate command as well
+    double new_cmd_vel = 0.0; // value of speed to be commanded; update each iteration
+    double new_cmd_omega = 0.1; // update spin rate command as well
 
     geometry_msgs::Twist cmd_vel; //create a variable of type "Twist" to publish speed/spin commands
 
@@ -148,10 +148,12 @@ int main(int argc, char **argv) {
     while (ros::ok()) // do work here in infinite loop (desired for this example), but terminate if detect ROS has faulted (or ctl-C)
     {
         ros::spinOnce(); // allow callbacks to populate fresh data
-        // compute distance travelled so far:
-        double delta_x = odom_x_ - start_x;
-        double delta_y = odom_y_ - start_y;
-        segment_length_done = sqrt(delta_x * delta_x + delta_y * delta_y);
+        // compute angle travelled so far:
+        //double delta_x = odom_x_ - start_x;
+        //double delta_y = odom_y_ - start_y;
+        double delta_phi = odom_phi_ - start_phi;
+        segment_length_done = sqrt(delta_phi * delta_phi);
+
         ROS_INFO("dist travelled: %f", segment_length_done);
         double dist_to_go = segment_length - segment_length_done;
 
@@ -172,31 +174,31 @@ int main(int argc, char **argv) {
   
 
         //how does the current velocity compare to the scheduled vel?
-        if (odom_vel_ < scheduled_vel) {  // maybe we halted, e.g. due to estop or obstacle;
+        if (odom_omega_ < scheduled_vel) {  // maybe we halted, e.g. due to estop or obstacle;
             // may need to ramp up to v_max; do so within accel limits
-            double v_test = odom_vel_ + a_max*dt_callback_; // if callbacks are slow, this could be abrupt
+            double v_test = odom_omega_ + a_max*dt_callback_; // if callbacks are slow, this could be abrupt
             // operator:  c = (a>b) ? a : b;
-            new_cmd_vel = (v_test < scheduled_vel) ? v_test : scheduled_vel; //choose lesser of two options
+            new_cmd_omega = (v_test < scheduled_vel) ? v_test : scheduled_vel; //choose lesser of two options
             // this prevents overshooting scheduled_vel
-        } else if (odom_vel_ > scheduled_vel) { //travelling too fast--this could be trouble
+        } else if (odom_omega_ > scheduled_vel) { //travelling too fast--this could be trouble
             // ramp down to the scheduled velocity.  However, scheduled velocity might already be ramping down at a_max.
             // need to catch up, so ramp down even faster than a_max.  Try 1.2*a_max.
-            ROS_INFO("odom vel: %f; sched vel: %f",odom_vel_,scheduled_vel); //debug/analysis output; can comment this out
+            ROS_INFO("odom omega: %f; sched vel: %f",odom_omega_,scheduled_vel); //debug/analysis output; can comment this out
             
-            double v_test = odom_vel_ - 1.2 * a_max*dt_callback_; //moving too fast--try decelerating faster than nominal a_max
+            double v_test = odom_omega_ - 1.2 * a_max*dt_callback_; //moving too fast--try decelerating faster than nominal a_max
 
-            new_cmd_vel = (v_test > scheduled_vel) ? v_test : scheduled_vel; // choose larger of two options...don't overshoot scheduled_vel
+            new_cmd_omega = (v_test > scheduled_vel) ? v_test : scheduled_vel; // choose larger of two options...don't overshoot scheduled_vel
         } else {
-            new_cmd_vel = scheduled_vel; //silly third case: this is already true, if here.  Issue the scheduled velocity
+            new_cmd_omega = scheduled_vel; //silly third case: this is already true, if here.  Issue the scheduled velocity
         }
-        ROS_INFO("cmd vel: %f",new_cmd_vel); // debug output
+        ROS_INFO("cmd omega: %f",new_cmd_omega); // debug output
 
         cmd_vel.linear.x = new_cmd_vel;
-        cmd_vel.angular.z = new_cmd_omega; // spin command; always zero, in this example
+        cmd_vel.angular.z = new_cmd_omega; // spin command; 
         if (dist_to_go <= 0.0) { //uh-oh...went too far already!
-            cmd_vel.linear.x = 0.0;  //command vel=0
+            cmd_vel.angular.z = 0.0;  //command vel=0
         }
-        vel_cmd_publisher.publish(cmd_vel); // publish the command to robot0/cmd_vel
+        vel_cmd_publisher.publish(cmd_vel); // publish the command to robot0/cmd_omega
         rtimer.sleep(); // sleep for remainder of timed iteration
         if (dist_to_go <= 0.0) break; // halt this node when this segment is complete.
         // will want to generalize this to handle multiple segments
@@ -204,21 +206,6 @@ int main(int argc, char **argv) {
     }
     ROS_INFO("completed move distance");
 
-    cmd_vel.linear.x = 0.0;
-    cmd_vel.angular.z = -0.314;
-    int niters=100; // 5 sec
-    ROS_INFO("Time to rotate negative");
-    for (int i=0;i<niters;i++) {
-        vel_cmd_publisher.publish(cmd_vel); // really, should only need to publish this once, but no hard done
-        rtimer.sleep(); // sleep for (remainder of) 10m
-    }
-
-    ROS_INFO("my work here is done");
-    while (ros::ok()) 
-    {
-        cmd_vel.linear.x = 0.0;
-        cmd_vel.angular.z = 0;
-        vel_cmd_publisher.publish(cmd_vel); // and halt
-    }
+    
 }
 
