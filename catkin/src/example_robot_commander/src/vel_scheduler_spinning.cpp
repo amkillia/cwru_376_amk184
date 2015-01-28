@@ -35,7 +35,7 @@ const double v_max = 5.0; //1m/sec is a slow walk
 const double v_min = 0.1; // if command velocity too low, robot won't move
 const double a_max = 0.1; //1m/sec^2 is 0.1 g's
 //const double a_max_decel = 0.1; // TEST
-const double omega_max = 1.0; //1 rad/sec-> about 6 seconds to rotate 1 full rev
+const double omega_max = 1; //1 rad/sec-> about 6 seconds to rotate 1 full rev
 const double alpha_max = 0.25; //0.5 rad/sec^2-> takes 2 sec to get from rest to full omega
 const double DT = 0.1; // choose an update rate of 20Hz; go faster with actual hardware
 
@@ -155,13 +155,13 @@ int main(int argc, char **argv) {
         double dist_to_go = segment_length - segment_length_done;
 
         //use segment_length_done to decide what vel should be, as per plan
-        if (dist_to_go<= 0.0) { // at goal, or overshot; stop!
+        if (dist_to_go <= 0.0) { // at goal, or overshot; stop!
             scheduled_omega= 0.0;
         }
         else if (dist_to_go <= dist_decel) { //possibly should be braking to a halt
             // dist = 0.5*a*t_halt^2; so t_halt = sqrt(2*dist/a);   v = a*t_halt
             // so v = a*sqrt(2*dist/a) = sqrt(2*dist*a)
-            scheduled_omega = sqrt(2 * dist_to_go * alpha_max);
+            scheduled_omega = sqrt(2 * (dist_to_go) * alpha_max);
             ROS_INFO("braking zone: v_sched = %f",scheduled_omega);
         }
         else { // not ready to decel, so target vel is v_max, either accel to it or hold it
@@ -171,7 +171,7 @@ int main(int argc, char **argv) {
   
 
         //how does the current velocity compare to the scheduled vel?
-        if (odom_omega_ < scheduled_omega) {  // maybe we halted, e.g. due to estop or obstacle;
+        if (odom_omega_ > scheduled_omega) {  // maybe we halted, e.g. due to estop or obstacle;
             // may need to ramp up to v_max; do so within accel limits
             double v_test = odom_omega_ +alpha_max*dt_callback_; // if callbacks are slow, this could be abrupt
             // operator:  c = (a>b) ? a : b;
@@ -191,7 +191,13 @@ int main(int argc, char **argv) {
         ROS_INFO("cmd omega: %f",new_cmd_omega); // debug output
 
         cmd_vel.linear.x = new_cmd_vel;
-        cmd_vel.angular.z = new_cmd_omega; // spin command; 
+        cmd_vel.angular.z = new_cmd_omega ; // spin command; 
+        /*if(delta_phi > 0.0) {
+            cmd_vel.angular.z = new_cmd_omega;
+        } else {
+            cmd_vel.angular.z = (-1)*new_cmd_omega;
+        }*/
+
         if (dist_to_go <= 0.0) { //uh-oh...went too far already!
             cmd_vel.angular.z = 0.0;  //command vel=0
         }
