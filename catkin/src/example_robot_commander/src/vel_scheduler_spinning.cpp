@@ -1,4 +1,3 @@
-
 // try this, e.g. with roslaunch stdr_launchers server_with_map_and_gui_plus_robot.launch
 // or:  roslaunch cwru_376_launchers stdr_glennan_2.launch 
 // watch resulting velocity commands with: rqt_plot /robot0/cmd_vel/linear/x (or jinx/cmd_vel...)
@@ -11,21 +10,16 @@
 /*
 From:
 http://www.euclideanspace.com/maths/geometry/rotations/conversions/angleToQuaternion/
-
 qx = ax * sin(angle/2)
 qy = ay * sin(angle/2)
 qz = az * sin(angle/2)
 qw = cos(angle/2)
-
-
 so, quaternion in 2-D plane (x,y,theta):
 ax=0, ay=0, az = 1.0
-
 qx = 0;
 qy = 0;
 qz = sin(angle/2)
 qw = cos(angle/2)
-
 therefore, theta = 2*atan2(qz,qw)
 */
 
@@ -42,8 +36,8 @@ const double v_min = 0.1; // if command velocity too low, robot won't move
 const double a_max = 0.1; //1m/sec^2 is 0.1 g's
 //const double a_max_decel = 0.1; // TEST
 const double omega_max = 1.0; //1 rad/sec-> about 6 seconds to rotate 1 full rev
-const double alpha_max = 0.5; //0.5 rad/sec^2-> takes 2 sec to get from rest to full omega
-const double DT = 0.050; // choose an update rate of 20Hz; go faster with actual hardware
+const double alpha_max = 0.25; //0.5 rad/sec^2-> takes 2 sec to get from rest to full omega
+const double DT = 0.1; // choose an update rate of 20Hz; go faster with actual hardware
 
 // globals for communication w/ callbacks:
 double odom_vel_ = 0.0; // measured/published system speed
@@ -98,7 +92,7 @@ int main(int argc, char **argv) {
 
     // here is a crude description of one segment of a journey.  Will want to generalize this to handle multiple segments
     // define the desired path length of this segment
-    double segment_length = 0.75; // desired travel distance in meters; anticipate travelling multiple segments
+    double segment_length = 1.57; // desired travel distance in meters; anticipate travelling multiple segments
     
     //here's a subtlety:  might be tempted to measure distance to the goal, instead of distance from the start.
     // HOWEVER, will NEVER satisfy distance to goal = 0 precisely, but WILL eventually move far enought to satisfy distance travelled condition
@@ -109,8 +103,9 @@ int main(int argc, char **argv) {
     double start_phi = 0.0;
 
     double scheduled_vel = 0.0; //desired vel, assuming all is per plan
+    double scheduled_omega = 0.0; //ashley added this, desired yaw rate
     double new_cmd_vel = 0.0; // value of speed to be commanded; update each iteration
-    double new_cmd_omega = 0.1; // update spin rate command as well
+    double new_cmd_omega = 0.05; // update spin rate command as well
 
     geometry_msgs::Twist cmd_vel; //create a variable of type "Twist" to publish speed/spin commands
 
@@ -136,60 +131,62 @@ int main(int argc, char **argv) {
     ROS_INFO("start pose: x %f, y= %f, phi = %f", start_x, start_y, start_phi);
 
     // compute some properties of trapezoidal velocity profile plan:
-    double T_accel = v_max / a_max; //...assumes start from rest
-    double T_decel = v_max / a_max; //(for same decel as accel); assumes brake to full halt
-    double dist_accel = 0.5 * a_max * (T_accel * T_accel); //distance rqd to ramp up to full speed
-    double dist_decel = 0.5 * a_max * (T_decel * T_decel);; //same as ramp-up distance
-    double dist_const_v = segment_length - dist_accel - dist_decel; //if this is <0, never get to full spd
-    double T_const_v = dist_const_v / v_max; //will be <0 if don't get to full speed
-    double T_segment_tot = T_accel + T_decel + T_const_v; // expected duration of this move
+    double T_accel = omega_max / alpha_max; //...assumes start from rest
+    double T_decel = omega_max / alpha_max; //(for same decel as accel); assumes brake to full halt
+    double dist_accel = 0.5 * alpha_max * (T_accel * T_accel); //distance rqd to ramp up to full speed
+    double dist_decel = 0.5 * alpha_max * (T_decel * T_decel);; //same as ramp-up distance
+    double dist_const_omega = segment_length - dist_accel - dist_decel; //if this is <0, never get to full spd
+    double T_const_omega = dist_const_omega / omega_max; //will be <0 if don't get to full speed
+    double T_segment_tot = T_accel + T_decel + T_const_omega; // expected duration of this move
 
     //dist_decel*= 2.0; // TEST TEST TEST
     while (ros::ok()) // do work here in infinite loop (desired for this example), but terminate if detect ROS has faulted (or ctl-C)
     {
         ros::spinOnce(); // allow callbacks to populate fresh data
         // compute angle travelled so far:
+
         //double delta_x = odom_x_ - start_x;
         //double delta_y = odom_y_ - start_y;
+
         double delta_phi = odom_phi_ - start_phi;
-        segment_length_done = sqrt(delta_phi * delta_phi);
+        segment_length_done = delta_phi;
 
         ROS_INFO("dist travelled: %f", segment_length_done);
         double dist_to_go = segment_length - segment_length_done;
 
         //use segment_length_done to decide what vel should be, as per plan
         if (dist_to_go<= 0.0) { // at goal, or overshot; stop!
-            scheduled_vel=0.0;
+            scheduled_omega= 0.0;
         }
         else if (dist_to_go <= dist_decel) { //possibly should be braking to a halt
             // dist = 0.5*a*t_halt^2; so t_halt = sqrt(2*dist/a);   v = a*t_halt
             // so v = a*sqrt(2*dist/a) = sqrt(2*dist*a)
-            scheduled_vel = sqrt(2 * dist_to_go * a_max);
-            ROS_INFO("braking zone: v_sched = %f",scheduled_vel);
+            scheduled_omega = sqrt(2 * dist_to_go * alpha_max);
+            ROS_INFO("braking zone: v_sched = %f",scheduled_omega);
         }
         else { // not ready to decel, so target vel is v_max, either accel to it or hold it
-            scheduled_vel = v_max;
+            scheduled_omega = omega_max;
         }
         
   
 
         //how does the current velocity compare to the scheduled vel?
-        if (odom_omega_ < scheduled_vel) {  // maybe we halted, e.g. due to estop or obstacle;
+        if (odom_omega_ < scheduled_omega) {  // maybe we halted, e.g. due to estop or obstacle;
             // may need to ramp up to v_max; do so within accel limits
-            double v_test = odom_omega_ + a_max*dt_callback_; // if callbacks are slow, this could be abrupt
+            double v_test = odom_omega_ +alpha_max*dt_callback_; // if callbacks are slow, this could be abrupt
             // operator:  c = (a>b) ? a : b;
-            new_cmd_omega = (v_test < scheduled_vel) ? v_test : scheduled_vel; //choose lesser of two options
+            new_cmd_omega = (v_test < scheduled_omega) ? v_test : scheduled_omega; //choose lesser of two options
             // this prevents overshooting scheduled_vel
-        } else if (odom_omega_ > scheduled_vel) { //travelling too fast--this could be trouble
+        } else if (odom_omega_ > scheduled_omega) { //travelling too fast--this could be trouble
             // ramp down to the scheduled velocity.  However, scheduled velocity might already be ramping down at a_max.
             // need to catch up, so ramp down even faster than a_max.  Try 1.2*a_max.
-            ROS_INFO("odom omega: %f; sched vel: %f",odom_omega_,scheduled_vel); //debug/analysis output; can comment this out
+            ROS_INFO("odom omega: %f; sched omega: %f",odom_omega_,scheduled_omega); //debug/analysis output; can comment this out
             
-            double v_test = odom_omega_ - 1.2 * a_max*dt_callback_; //moving too fast--try decelerating faster than nominal a_max
+            double omega_test = odom_omega_ - 1.2 * alpha_max*dt_callback_; //moving too fast--try decelerating faster than nominal a_max
 
-            new_cmd_omega = (v_test > scheduled_vel) ? v_test : scheduled_vel; // choose larger of two options...don't overshoot scheduled_vel
+            new_cmd_omega = (omega_test > scheduled_omega) ? omega_test : scheduled_omega; // choose larger of two options...don't overshoot scheduled_vel
         } else {
-            new_cmd_omega = scheduled_vel; //silly third case: this is already true, if here.  Issue the scheduled velocity
+            new_cmd_omega = scheduled_omega; //silly third case: this is already true, if here.  Issue the scheduled velocity
         }
         ROS_INFO("cmd omega: %f",new_cmd_omega); // debug output
 
@@ -205,7 +202,4 @@ int main(int argc, char **argv) {
         // ideally, will want to receive segments dynamically as publications from a higher-level planner
     }
     ROS_INFO("completed move distance");
-
-    
 }
-
