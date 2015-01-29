@@ -204,21 +204,21 @@ int main(int argc, char **argv) {
     }
     ROS_INFO("completed move distance");
 
-    cmd_vel.linear.x = 0.0;
+    /*cmd_vel.linear.x = 0.0;
     cmd_vel.angular.z = -0.314;
     int niters=100; // 5 sec
     ROS_INFO("Time to rotate negative");
     for (int i=0;i<niters;i++) {
         vel_cmd_publisher.publish(cmd_vel); // really, should only need to publish this once, but no hard done
         rtimer.sleep(); // sleep for (remainder of) 10m
-    }
+    }*/
 
-    ROS_INFO("my work here is done");
+    /*ROS_INFO("my work here is done");
     while (ros::ok()) 
     {
         cmd_vel.linear.x = 0.0;
-        cmd_vel.angular.z = 0;
+        cmd_vel.angular.z = 0.0;
         vel_cmd_publisher.publish(cmd_vel); // and halt
-    }
+    }*/
 }
 
