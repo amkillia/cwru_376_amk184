@@ -92,7 +92,7 @@ int main(int argc, char **argv) {
 
     // here is a crude description of one segment of a journey.  Will want to generalize this to handle multiple segments
     // define the desired path length of this segment
-    double segment_length = 1.57; // desired travel distance in meters; anticipate travelling multiple segments
+    double segment_length = -1.57; // desired travel distance in meters; anticipate travelling multiple segments
     
     //here's a subtlety:  might be tempted to measure distance to the goal, instead of distance from the start.
     // HOWEVER, will NEVER satisfy distance to goal = 0 precisely, but WILL eventually move far enought to satisfy distance travelled condition
@@ -147,25 +147,29 @@ int main(int argc, char **argv) {
 
         //double delta_x = odom_x_ - start_x;
         //double delta_y = odom_y_ - start_y;
-
+        ROS_INFO("start_phi: %f", start_phi);
+        ROS_INFO("odom_phi: %f", odom_phi_);
         double delta_phi = odom_phi_ - start_phi;
         segment_length_done = delta_phi;
 
         ROS_INFO("dist travelled: %f", segment_length_done);
-        double dist_to_go = segment_length - segment_length_done;
+        double dist_to_go = segment_length  - segment_length_done;
+        ROS_INFO("dist_to_go: %f", dist_to_go);
 
         //use segment_length_done to decide what vel should be, as per plan
-        if (dist_to_go <= 0.0) { // at goal, or overshot; stop!
+        if (dist_to_go >= 0.0) { // at goal, or overshot; stop!
             scheduled_omega= 0.0;
         }
         else if (dist_to_go <= dist_decel) { //possibly should be braking to a halt
             // dist = 0.5*a*t_halt^2; so t_halt = sqrt(2*dist/a);   v = a*t_halt
             // so v = a*sqrt(2*dist/a) = sqrt(2*dist*a)
-            scheduled_omega = sqrt(2 * (dist_to_go) * alpha_max);
+            ROS_INFO("dist_decel %f", dist_decel);
+            ROS_INFO("alpha_max %f", alpha_max);
+            scheduled_omega = -1*sqrt(-2 * (dist_to_go) * alpha_max);
             ROS_INFO("braking zone: v_sched = %f",scheduled_omega);
         }
         else { // not ready to decel, so target vel is v_max, either accel to it or hold it
-            scheduled_omega = omega_max;
+            scheduled_omega = -1* omega_max;
         }
         
   
@@ -173,11 +177,12 @@ int main(int argc, char **argv) {
         //how does the current velocity compare to the scheduled vel?
         if (odom_omega_ > scheduled_omega) {  // maybe we halted, e.g. due to estop or obstacle;
             // may need to ramp up to v_max; do so within accel limits
+            ROS_INFO("dt_callback_ %f", dt_callback_);
             double v_test = odom_omega_ +alpha_max*dt_callback_; // if callbacks are slow, this could be abrupt
             // operator:  c = (a>b) ? a : b;
             new_cmd_omega = (v_test < scheduled_omega) ? v_test : scheduled_omega; //choose lesser of two options
             // this prevents overshooting scheduled_vel
-        } else if (odom_omega_ > scheduled_omega) { //travelling too fast--this could be trouble
+        } else if (odom_omega_ < scheduled_omega) { //travelling too fast--this could be trouble
             // ramp down to the scheduled velocity.  However, scheduled velocity might already be ramping down at a_max.
             // need to catch up, so ramp down even faster than a_max.  Try 1.2*a_max.
             ROS_INFO("odom omega: %f; sched omega: %f",odom_omega_,scheduled_omega); //debug/analysis output; can comment this out
@@ -198,12 +203,12 @@ int main(int argc, char **argv) {
             cmd_vel.angular.z = (-1)*new_cmd_omega;
         }*/
 
-        if (dist_to_go <= 0.0) { //uh-oh...went too far already!
+        if (dist_to_go >= 0.0) { //uh-oh...went too far already!
             cmd_vel.angular.z = 0.0;  //command vel=0
         }
         vel_cmd_publisher.publish(cmd_vel); // publish the command to robot0/cmd_omega
         rtimer.sleep(); // sleep for remainder of timed iteration
-        if (dist_to_go <= 0.0) break; // halt this node when this segment is complete.
+        if (dist_to_go >= 0.0) break; // halt this node when this segment is complete.
         // will want to generalize this to handle multiple segments
         // ideally, will want to receive segments dynamically as publications from a higher-level planner
     }
