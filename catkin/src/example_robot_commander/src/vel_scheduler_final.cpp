@@ -1,34 +1,4 @@
 
-// try this, e.g. with roslaunch stdr_launchers server_with_map_and_gui_plus_robot.launch
-// or:  roslaunch cwru_376_launchers stdr_glennan_2.launch 
-// watch resulting velocity commands with: rqt_plot /robot0/cmd_vel/linear/x (or jinx/cmd_vel...)
-
-//intent of this program: modulate the velocity command to comply with a speed limit, v_max,
-// acceleration limits, +/-a_max, and come to a halt gracefully at the end of
-// an intended line segment
-
-// notes on quaternions:
-/*
-From:
-http://www.euclideanspace.com/maths/geometry/rotations/conversions/angleToQuaternion/
-
-qx = ax * sin(angle/2)
-qy = ay * sin(angle/2)
-qz = az * sin(angle/2)
-qw = cos(angle/2)
-
-
-so, quaternion in 2-D plane (x,y,theta):
-ax=0, ay=0, az = 1.0
-
-qx = 0;
-qy = 0;
-qz = sin(angle/2)
-qw = cos(angle/2)
-
-therefore, theta = 2*atan2(qz,qw)
-*/
-
 #include <ros/ros.h>
 #include <std_msgs/Float64.h>
 #include <geometry_msgs/Twist.h>
@@ -88,10 +58,7 @@ void odomCallback(const nav_msgs::Odometry& odom_rcvd) {
 
     void linear_motion (double length, ros::Publisher vel_cmd_publisher, ros::Rate rtimer)
     {
-        
-
-        //here's a subtlety:  might be tempted to measure distance to the goal, instead of distance from the start.
-        // HOWEVER, will NEVER satisfy distance to goal = 0 precisely, but WILL eventually move far enought to satisfy distance travelled condition
+    
         double segment_length_done = 0.0; // need to compute actual distance travelled within the current segment
         double start_x = 0.0; // fill these in with actual values once odom message is received
         double start_y = 0.0; // subsequent segment start coordinates should be specified relative to end of previous segment
@@ -135,16 +102,6 @@ void odomCallback(const nav_msgs::Odometry& odom_rcvd) {
         double T_const_v = dist_const_v / v_max; //will be <0 if don't get to full speed
         double T_segment_tot = T_accel + T_decel + T_const_v; // expected duration of this move
 
-        // compute some properties of trapezoidal velocity profile plan omega:
-        /*double T_accel_omega = omega_max / alpha_max; //...assumes start from rest
-        double T_decel_omega = omega_max / alpha_max; //(for same decel as accel); assumes brake to full halt
-        double dist_accel_omega = 0.5 * alpha_max * (T_accel * T_accel); //distance rqd to ramp up to full speed
-        double dist_decel_omega = 0.5 * alpha_max * (T_decel * T_decel);; //same as ramp-up distance
-        double dist_const_omega = segment_length_spin - dist_accel - dist_decel; //if this is <0, never get to full spd
-        double T_const_omega = dist_const_omega / omega_max; //will be <0 if don't get to full speed
-        double T_segment_tot_omega = T_accel + T_decel + T_const_omega; // expected duration of this move
-        */
-
         while (ros::ok()) // do work here in infinite loop (desired for this example), but terminate if detect ROS has faulted (or ctl-C)
         {
             ros::spinOnce(); // allow callbacks to populate fresh data
@@ -169,8 +126,6 @@ void odomCallback(const nav_msgs::Odometry& odom_rcvd) {
                 scheduled_vel = v_max;
             }
         
-  
-
             //how does the current velocity compare to the scheduled vel?
             if (odom_vel_ < scheduled_vel) {  // maybe we halted, e.g. due to estop or obstacle;
                 // may need to ramp up to v_max; do so within accel limits
@@ -199,16 +154,12 @@ void odomCallback(const nav_msgs::Odometry& odom_rcvd) {
             vel_cmd_publisher.publish(cmd_vel); // publish the command to robot0/cmd_vel
             rtimer.sleep(); // sleep for remainder of timed iteration
             if (dist_to_go <= 0.0) break; // halt this node when this segment is complete.
-            // will want to generalize this to handle multiple segments
-            // ideally, will want to receive segments dynamically as publications from a higher-level planner
         }
     }
 
     void angular_motion (double turn, ros::Publisher vel_cmd_publisher, ros::Rate rtimer)
     {
 
-        //here's a subtlety:  might be tempted to measure distance to the goal, instead of distance from the start.
-        // HOWEVER, will NEVER satisfy distance to goal = 0 precisely, but WILL eventually move far enought to satisfy distance travelled condition
         double segment_length_done = 0.0; // need to compute actual distance travelled within the current segment
         double start_x = 0.0; // fill these in with actual values once odom message is received
         double start_y = 0.0; // subsequent segment start coordinates should be specified relative to end of previous segment
@@ -250,7 +201,6 @@ void odomCallback(const nav_msgs::Odometry& odom_rcvd) {
         double T_const_omega = dist_const_omega / omega_max; //will be <0 if don't get to full speed
         double T_segment_tot = T_accel + T_decel + T_const_omega; // expected duration of this move
 
-        //dist_decel*= 2.0; // TEST TEST TEST
         while (ros::ok()) // do work here in infinite loop (desired for this example), but terminate if detect ROS has faulted (or ctl-C)
         {
             ros::spinOnce(); // allow callbacks to populate fresh data
@@ -307,11 +257,6 @@ void odomCallback(const nav_msgs::Odometry& odom_rcvd) {
 
             cmd_vel.linear.x = 0.0;
             cmd_vel.angular.z = new_cmd_omega ; // spin command; 
-            /*if(delta_phi > 0.0) {
-                cmd_vel.angular.z = new_cmd_omega;
-            } else {
-                cmd_vel.angular.z = (-1)*new_cmd_omega;
-            }*/
 
             if (dist_to_go >= 0.0) { //uh-oh...went too far already!
                 cmd_vel.angular.z = 0.0;  //command vel=0
@@ -320,8 +265,6 @@ void odomCallback(const nav_msgs::Odometry& odom_rcvd) {
             vel_cmd_publisher.publish(cmd_vel); // publish the command to robot0/cmd_omega
             rtimer.sleep(); // sleep for remainder of timed iteration
             if (dist_to_go >= 0.0) break; // halt this node when this segment is complete.
-            // will want to generalize this to handle multiple segments
-            // ideally, will want to receive segments dynamically as publications from a higher-level planner
         }
     }
 
@@ -342,12 +285,13 @@ int main(int argc, char **argv) {
     double segment_length_1 = 4.75; // desired travel distance in meters; anticipate travelling multiple segments
     double segment_turn = -1.56179633; 
     double segment_length_2 = 12.5;
-
+    double segment_length_3 = 9.0;
     
     linear_motion (segment_length_1, vel_cmd_publisher, rtimer);
     angular_motion (segment_turn, vel_cmd_publisher, rtimer);
     linear_motion (segment_length_2, vel_cmd_publisher, rtimer);
     angular_motion (segment_turn, vel_cmd_publisher, rtimer);
+    linear_motion (segment_length_3, vel_cmd_publisher, rtimer);
     
     
     ROS_INFO("completed move distance");
