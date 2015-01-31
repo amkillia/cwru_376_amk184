@@ -98,7 +98,7 @@ int main(int argc, char **argv) {
 
     // here is a crude description of one segment of a journey.  Will want to generalize this to handle multiple segments
     // define the desired path length of this segment
-    double segment_length = 4.75; // desired travel distance in meters; anticipate travelling multiple segments
+    double segment_length = 0.5; // desired travel distance in meters; anticipate travelling multiple segments
     
     //here's a subtlety:  might be tempted to measure distance to the goal, instead of distance from the start.
     // HOWEVER, will NEVER satisfy distance to goal = 0 precisely, but WILL eventually move far enought to satisfy distance travelled condition
