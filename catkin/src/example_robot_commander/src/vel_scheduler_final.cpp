@@ -4,6 +4,16 @@
 #include <geometry_msgs/Twist.h>
 #include <nav_msgs/Odometry.h>
 #include <math.h>
+#include <ros/ros.h>
+//#include <cwru_base/Pose.h>
+#include <iostream>
+#include <fstream>
+//#include <cwru_base/cRIOSensors.h>
+#include <std_msgs/Bool.h>
+using namespace std;
+
+bool estop;
+string check;
 
 
 // set some dynamic limits...
@@ -206,8 +216,6 @@ void odomCallback(const nav_msgs::Odometry& odom_rcvd) {
             ros::spinOnce(); // allow callbacks to populate fresh data
             // compute angle travelled so far:
 
-            //double delta_x = odom_x_ - start_x;
-            //double delta_y = odom_y_ - start_y;
             ROS_INFO("start_phi: %f", start_phi);
             ROS_INFO("odom_phi: %f", odom_phi_);
             double delta_phi = odom_phi_ - start_phi;
@@ -268,6 +276,16 @@ void odomCallback(const nav_msgs::Odometry& odom_rcvd) {
         }
     }
 
+    void estopCallback(const std_msgs::Bool::ConstPtr& estop) 
+    {
+        if (estop->data == true)
+            check = "estop_off";  // means motors are ENABLED
+        else if (estop->data == false)
+            check = "estop_on";  // means motors are DISABLED
+
+        cout<<check<<endl;
+    }
+
 int main(int argc, char **argv) {
     ros::init(argc, argv, "vel_scheduler"); // name of this node will be "minimal_publisher1"
     ros::NodeHandle nh; // get a ros nodehandle; standard yadda-yadda
@@ -279,20 +297,23 @@ int main(int argc, char **argv) {
     // receive odom messages and strip off the components we want to use
     // tested this OK w/ stdr
     
-
-    // here is a crude description of one segment of a journey.  Will want to generalize this to handle multiple segments
     // define the desired path length of this segment
-    double segment_length_1 = 4.75; // desired travel distance in meters; anticipate travelling multiple segments
-    double segment_turn = -1.56179633; 
-    double segment_length_2 = 12.5;
-    double segment_length_3 = 9.0;
-    
-    linear_motion (segment_length_1, vel_cmd_publisher, rtimer);
-    angular_motion (segment_turn, vel_cmd_publisher, rtimer);
-    linear_motion (segment_length_2, vel_cmd_publisher, rtimer);
-    angular_motion (segment_turn, vel_cmd_publisher, rtimer);
-    linear_motion (segment_length_3, vel_cmd_publisher, rtimer);
-    
+
+    double vv[5] = { 4.75,-1.56179633,12.5,-1.56179633,9.0 };
+    vector<double> pathVector (vv, vv + sizeof(vv) / sizeof(vv[0]) );
+
+
+    for(long index=0; index < (long)pathVector.size(); ++index)
+    {
+        if(index % 2 == 0)
+        {
+           linear_motion (pathVector.at(index), vel_cmd_publisher, rtimer); 
+        }
+        else
+        {
+           angular_motion (pathVector.at(index), vel_cmd_publisher, rtimer); 
+        }
+    }
     
     ROS_INFO("completed move distance");
 
